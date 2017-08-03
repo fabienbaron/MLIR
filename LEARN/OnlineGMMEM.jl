@@ -1,3 +1,5 @@
+using PyPlot
+
 type GMM
   nmodels::Float64
   dim::Float64
@@ -73,7 +75,7 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
     GMMopt = GMM(K, size(DataSource(1),1), zeros(size(DataSource(1),1),size(DataSource(1),1),K), zeros(K), zeros(size(DataSource(1),1),K));
   end
 
-  llh = zeros(1,NumIterations);
+  llh = zeros(NumIterations);
 
   if (isdefined(:T0) == false)
     T0 = 500;
@@ -107,8 +109,7 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
   #    TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
   #    label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
   #  end
-
-    label = ceil(K*rand(1,N));
+    label = ceil.(K*rand(1,N));
     R = full(sparse(collect(1:N),vec(label),ones(N),N,K));
     eta = 1;
   else
@@ -118,7 +119,7 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
       R[:,k] = loggausspdf2(X,GMMopt.covs[:,:,k])';
     end
 
-    R = broadcast(+,R,log(GMMopt.mixweights));
+    R = broadcast(+,R,log.(GMMopt.mixweights));
     T = logsumexp(R,2);
     R = broadcast(+,R,T);
     R = exp(R);
@@ -131,8 +132,9 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
     # if there are no zero probabilites there, use this mini batch if (all(s>0))
     GMMopt.mixweights = GMMopt.mixweights*(1-eta) + eta*s/N;
     for k = 1:K
-      sR = sqrt(R[:,k]);
-      Xo = broadcast(*,X[:,find(sR.>0)],sR[find(sR.>0)]');
+      sR = sqrt.(R[:,k]);
+      indx = find(sR.>0);
+      Xo = broadcast(*,X[:,indx],sR[indx]');
       if s[k]>0
         Sig = (Xo*Xo')/s[k];
         Sig = Sig + 1e-5*eye(size(Xo,1));
@@ -158,8 +160,8 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
       X = DataSource(MiniBatchSize);
     end
     if removeFlatPatches
-      inds = find(std(X,1)<0.002);
-      X[:,inds] = [];
+      nonflat = find(std(X,1)>0.002);
+      X = X[:,nonflat];
     end
     N = size(X,2);
 
@@ -169,23 +171,26 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
     # calculate the likelihood on the N-1 leading eigenvectors due to DC removal
     for k = 1:K
       D,V = eigs(GMMopt.covs[:,:,k],nev=size(GMMopt.covs,1)-1);
-      tt = V'*X;
-      R[:,k] = -((size(D,1))/2)*log(2*pi) - 0.5*sum(log.(D)) - 0.5*sum(tt.*(D\tt),1)';
+      tt = At_mul_B(V, X);
+      R[:,k] = -((size(D,1))/2)*log(2*pi) - 0.5*sum(log.(D)) - 0.5*sum(tt.*(diagm(D)\tt),1)';
     end
 
-    R = broadcast(+,R,log(GMMopt.mixweights)');
+    R = broadcast(+,R,log.(GMMopt.mixweights)');
     T = logsumexp(R,2);
-    llh[t] = sum(T)/N;
-    llh[t] = llh[t]/(size(X,1)-1)/log(2); # loglikelihood
+    llh[t] = (sum(T)/N)/(size(X,1)-1)/log(2); # loglikelihood
+    R = exp.(broadcast(-,R,T));
+
     # output
     println("Iteration", t, " of ", NumIterations, " logL: ", llh[t], " File: ", OutputFile, "\n");
 
     fig = figure("Progress",figsize=(10,5))
-    subplot(121)
-    plot(vec(llh[1:t]),linestyle="-",marker="o", label="log likelihood")
-    subplot(122)
-    plot(sort(GMMopt.mixweights,rev=true), linestyle="-",marker="o", label="GMM mixweights");
-    R = exp(broadcast(-,R,T));
+    ax = fig[:add_subplot](1,2,1)
+    ax[:plot](llh[1:t],linestyle="-",marker="o", label="log likelihood", color="black")
+    ax = fig[:add_subplot](1,2,2)
+    ax[:plot](sort(GMMopt.mixweights,rev=true), linestyle="-",marker="o", label="GMM mixweights", color="black");
+    ax[:set_ylim]([0,1])
+
+
   end
 
   return GMMopt,llh

@@ -26,7 +26,7 @@ alpha=0.6;
 FirstBatchSize=MiniBatchSize*10;
 removeFlatPatches=false;
 %% learn model from training data
-NewGMM = OnlineGMMEM(nmodels,@(N) removeDC(RandPatchesFromImagesCell(N,PatchSize,Images)),1000,MiniBatchSize,output_dict, 500, 0.6, MiniBatchSize*10, false);
+NewGMM = OnlineGMMEM(nmodels,@(N) removeDC(RandPatchesFromImagesCell(N,PatchSize,Images)),50,MiniBatchSize,output_dict, 500, 0.6, MiniBatchSize*10, false);
 
 % sort output
 %[NewGMM.mixweights,inds] = sort(NewGMM.mixweights,'descend');
