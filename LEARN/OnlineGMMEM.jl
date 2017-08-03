@@ -1,6 +1,7 @@
 using PyPlot
+using JLD
 
-type GMM
+mutable struct GMM
   nmodels::Float64
   dim::Float64
   covs::Array{Float64,3}
@@ -181,17 +182,22 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
     R = exp.(broadcast(-,R,T));
 
     # output
-    println("Iteration", t, " of ", NumIterations, " logL: ", llh[t], " File: ", OutputFile, "\n");
-
+    println("Iteration ", t, " out of ", NumIterations, " logL: ", llh[t], "\n");
     fig = figure("Progress",figsize=(10,5))
-    ax = fig[:add_subplot](1,2,1)
-    ax[:plot](llh[1:t],linestyle="-",marker="o", label="log likelihood", color="black")
-    ax = fig[:add_subplot](1,2,2)
-    ax[:plot](sort(GMMopt.mixweights,rev=true), linestyle="-",marker="o", label="GMM mixweights", color="black");
-    ax[:set_ylim]([0,1])
+    subplot(121)
+    plot(llh[1:t],linestyle="-",marker="o", color="black")
+    title("log likelihood")
+    subplot(122)
+    ax = gca()
+    ax[:cla]()
+    ylim(0,1)
+    plot(sort(GMMopt.mixweights,rev=true), linestyle="-",marker="o", color="black");
+    title("GMM mixweights")
 
-
-  end
-
+  if mod(t,10)==0
+    println("Saving status in ",OutputFile,"\n");
+    save(OutputFile,"GMM",GMMopt, "t",t, "NumIterations",NumIterations,"eta",eta, "MiniBatchSize",MiniBatchSize, "llh",llh,"alpha",alpha,"T0", T0);
+  end # end of for loop on iteration number
+end
   return GMMopt,llh
 end
