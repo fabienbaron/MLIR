@@ -1,6 +1,6 @@
 function randsample(n, k, replace = false) # Sample with replacement
 if replace == true
-  y = (Array{Int64})(ceil(n*rand(k)));
+  y = (Array{Int64})(ceil.(n*rand(k)));
 else
   if k > n
         println("K must be less than or equal to N for sampling without replacement.");
@@ -18,7 +18,7 @@ else
     x = zeros(n); # flags
     sumx = 0;
     while sumx < k
-      x[(Array{Int64})(ceil(n * rand(k-sumx)))] = 1; # sample w/replacement
+      x[(Array{Int64})(ceil.(n * rand(k-sumx)))] = 1; # sample w/replacement
       sumx = Int(sum(x)); # count how many unique elements so far
     end
     y = find(x.>0);

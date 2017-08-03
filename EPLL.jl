@@ -28,22 +28,18 @@ function mixturelog(GS, Y, SigmaNoise)
 end
 
 
-function logsumexp(X)
-  # Compute log(sum(exp(X))) while avoiding numerical underflow.
-  # subtract the largest in each column
-  Z = copy(X);
-  Y = maximum(Z,1);
-  for i=1:size(Z,2)
-    @inbounds Z[:,i] -= Y[i];
-  end
-  S = Y + log.(sum(exp.(Z),1));
-  i = find(.~isfinite.(Y));
-  if .~isempty(i)
-    S[i] = Y[i];
-  end
-  S
+function logsumexp(X, dim=1)
+# Compute log(sum(exp(X))) while avoiding numerical underflow.
+# subtract the largest in each column
+Y = maximum(X, dim);
+Z = broadcast(-,X,Y)
+S = Y + log.(sum(exp.(Z),dim));
+i = find(.~isfinite.(Y));
+if ~isempty(i)
+  S[i] = Y[i];
 end
-
+return S
+end
 
 function EPLL(x, GDict) # regularizer value
   patchSize = Int(sqrt(GDict.dim));

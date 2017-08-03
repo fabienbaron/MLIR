@@ -13,25 +13,24 @@ function loggausspdf2(X, sigma)
   d = size(X,1);
   R = chol(sigma);
   q = sum((R'\X).^2, 1);  # quadratic term (M distance)
-  c = d*log(2.0*pi)+2.0*sum(log(diag(R)));   # normalization constant
+  c = d*log(2.0*pi)+2.0*sum(log.(diag(R)));   # normalization constant
   y = -(c+q)/2;
 end
 
-function logsumexp(X)
-  # Compute log(sum(exp(X))) while avoiding numerical underflow.
-  # subtract the largest in each column
-  Z = copy(X);
-  Y = maximum(Z,1);
-  for i=1:size(Z,2)
-    @inbounds Z[:,i] -= Y[i];
-  end
-  S = Y + log(sum(exp(Z),1));
-  i = find(~isfinite(Y));
-  if ~isempty(i)
-    S[i] = Y[i];
-  end
-  S
+function logsumexp(X, dim=1)
+# Compute log(sum(exp(X))) while avoiding numerical underflow.
+# subtract the largest in each column
+Y = maximum(X, dim);
+Z = broadcast(-,X,Y)
+S = Y + log.(sum(exp.(Z),dim));
+i = find(.~isfinite.(Y));
+if ~isempty(i)
+  S[i] = Y[i];
 end
+return S
+end
+
+
 
 function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,alpha,FirstBatchSize,removeFlatPatches)
   # ONLINEGMMEM - Learns a GMM model in an online manner
@@ -98,17 +97,19 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
 
   N = size(X,2);
   if (typeof(GMM0) != GMM)
-    idx = randsample(N,K);
-    m = X[:,idx];
-    TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
-    label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
-    while K != length(unique(label))
-      idx = randsample(N,K);
-      m = X[:,idx];
-      TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
-      label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
-    end
-    R = full(sparse(collect(1:N),label,ones(N),N,K));
+  #  idx = randsample(N,K);
+  #  m = X[:,idx];
+  #  TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
+  #  label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
+  #  while K != length(unique(label))
+  #    idx = randsample(N,K);
+  #    m = X[:,idx];
+  #    TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
+  #    label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
+  #  end
+
+    label = ceil(K*rand(1,N));
+    R = full(sparse(collect(1:N),vec(label),ones(N),N,K));
     eta = 1;
   else
     # normal E step
@@ -169,28 +170,21 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
     for k = 1:K
       D,V = eigs(GMMopt.covs[:,:,k],nev=size(GMMopt.covs,1)-1);
       tt = V'*X;
-      R[:,k] = -((size(D,1))/2)*log(2*pi) - 0.5*sum(log((diag(D)))) - 0.5*sum(tt.*(D\tt),1)';
+      R[:,k] = -((size(D,1))/2)*log(2*pi) - 0.5*sum(log.(D)) - 0.5*sum(tt.*(D\tt),1)';
     end
 
-    R = broadcast(+,R,log(GMMopt.mixweights));
+    R = broadcast(+,R,log(GMMopt.mixweights)');
     T = logsumexp(R,2);
-    llh(t) = sum(T)/N;
-    llh(t) = llh(t)/(size(X,1)-1)/log(2); # loglikelihood
-
+    llh[t] = sum(T)/N;
+    llh[t] = llh[t]/(size(X,1)-1)/log(2); # loglikelihood
     # output
-   println("Iteration", t, " of ", NumIterations, " logL: ", llh(t), " File: ", OutputFile, "\n");
-   #plot(llh[1:t]);
-   #plot(sort(GMMopt.mixweights,'descend'))
-#    subplot(1,2,1);
-#    plot(llh(1:t),'o-');
-#    title('log likelihood');
-#    drawnow;
-#    subplot(1,2,2);
-#    plot(sort(GMMopt.mixweights,'descend'));
-#    set(gca,'YLim',[0 1]);
-#    title('GMM mixweights');
-#    drawnow;
+    println("Iteration", t, " of ", NumIterations, " logL: ", llh[t], " File: ", OutputFile, "\n");
 
+    fig = figure("Progress",figsize=(10,5))
+    subplot(121)
+    plot(vec(llh[1:t]),linestyle="-",marker="o", label="log likelihood")
+    subplot(122)
+    plot(sort(GMMopt.mixweights,rev=true), linestyle="-",marker="o", label="GMM mixweights");
     R = exp(broadcast(-,R,T));
   end
 
