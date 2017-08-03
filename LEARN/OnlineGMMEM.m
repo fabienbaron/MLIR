@@ -71,14 +71,16 @@ function [GMM,llh] = OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,Out
   end
   N = size(X,2);
   if ~isstruct(GMM0)
-    idx = randsample(N,K);
-    m = X(:,idx);
-    [~,label] = max(bsxfun(@minus,m'*X,sum(m.^2,1)'/2),[],1);
-    while K ~= length(unique(label))
-      idx = randsample(N,K);
-      m = X(:,idx);
-      [~,label] = max(bsxfun(@minus,m'*X,sum(m.^2,1)'/2),[],1);
-    end
+%    idx = randsample(N,K);
+%    m = X(:,idx);
+    label = ceil(K*rand(1,N));
+%    [~,label] = max(bsxfun(@minus,m'*X,sum(m.^2,1)'/2),[],1);
+%    while K ~= length(unique(label))
+%      idx = randsample(N,K);
+%      m = X(:,idx);
+%      [~,label] = max(bsxfun(@minus,m'*X,sum(m.^2,1)'/2),[],1);
+%    end
+
     R = full(sparse(1:N,label,1,N,K,N));
     eta = 1;
   else

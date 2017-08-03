@@ -26,10 +26,6 @@ function accumarray(subs, val; sz=maximum(subs,1))
   A
 end
 
-
-
-
-
 function im2col{T,N}(A::AbstractArray{T,N}, sz::NTuple{N,Int}, blocktype::AbstractString="sliding")
   if blocktype == "sliding"
     return im2col(A, sz, tuple(ones(Int,N)...))
@@ -43,7 +39,7 @@ end
 function im2col{T,N}(A::AbstractArray{T,N}, sz::NTuple{N,Int}, stride::NTuple{N,Int})
   check_im2col_col2im(size(A),sz,stride)
   ncols::Int = mapreduce( d -> 1 + div(size(A,d)-sz[d], stride[d]), *, 1:N)
-  im2col!(Array(T,prod(sz),ncols), A, sz, stride)
+  im2col!(Array{T}((prod(sz),ncols)), A, sz, stride)
 end
 
 

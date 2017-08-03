@@ -1,7 +1,6 @@
-#using FITSIO
 using OIFITS
 #read data file into Fabien Baron's custom structure
-type OIdata
+mutable struct OIdata
   nuv::Int64
   uv::Array{Float64,2}
   nw::Int64
@@ -41,6 +40,10 @@ function read_oifits(oifitsfile, grey=true)
   v2_data_err = v2table[1][:vis2err];
   v2_ucoord = -v2table[1][:ucoord];
   v2_vcoord = v2table[1][:vcoord];
+
+lambda_v2 = wavtable[][:eff_wave]
+
+
   mjd = v2table[1][:mjd];
   # merge all tables
   for itable=2:v2_ntables
@@ -48,7 +51,7 @@ function read_oifits(oifitsfile, grey=true)
     v2_data_err = hcat(v2_data_err, v2table[itable][:vis2err]);
     v2_ucoord = vcat(v2_ucoord, -v2table[itable][:ucoord]);
     v2_vcoord = vcat(v2_vcoord, v2table[itable][:vcoord]);
-    mjd = vcat(mjd, v2table[1][:mjd]);
+    mjd = vcat(mjd, v2table[itable][:mjd]);
   end
 
   mean_mjd = mean(mjd);
@@ -64,8 +67,8 @@ function read_oifits(oifitsfile, grey=true)
 
 
   nuvcoord = length(v2_ucoord);
-  v2_u = Array(Float64,nuvcoord*nw_true,nw_eff);
-  v2_v = Array(Float64,nuvcoord*nw_true,nw_eff);
+  v2_u = Array{Float64}(nuvcoord*nw_true,nw_eff);
+  v2_v = Array{Float64}(nuvcoord*nw_true,nw_eff);
 
   for u=1:nuvcoord
     v2_u[nw_true*(u-1)+1:nw_true*u,1] = v2_ucoord[u]*1./lam;
@@ -74,7 +77,7 @@ function read_oifits(oifitsfile, grey=true)
 
   nv2 = length(v2_data);
   v2_uv = hcat(vec(v2_u), vec(v2_v))' ; #need under this form for Fourier transform
-  baseline_v2 = vec(sqrt(v2_u.^2+v2_v.^2));
+  baseline_v2 = vec(sqrt.(v2_u.^2+v2_v.^2));
 
   t3table = OIFITS.select(tables,"OI_T3");
   t3_ntables = length(t3table);
@@ -115,12 +118,12 @@ function read_oifits(oifitsfile, grey=true)
   end
 
   nuvcoord_t3 = length(t3_u1coord);
-  t3_u1 = Array(Float64,nuvcoord_t3*nw_true,nw_eff);
-  t3_v1 = Array(Float64,nuvcoord_t3*nw_true,nw_eff);
-  t3_u2 = Array(Float64,nuvcoord_t3*nw_true,nw_eff);
-  t3_v2 = Array(Float64,nuvcoord_t3*nw_true,nw_eff);
-  t3_u3 = Array(Float64,nuvcoord_t3*nw_true,nw_eff);
-  t3_v3 = Array(Float64,nuvcoord_t3*nw_true,nw_eff);
+  t3_u1 = Array{Float64}(nuvcoord_t3*nw_true,nw_eff);
+  t3_v1 = Array{Float64}(nuvcoord_t3*nw_true,nw_eff);
+  t3_u2 = Array{Float64}(nuvcoord_t3*nw_true,nw_eff);
+  t3_v2 = Array{Float64}(nuvcoord_t3*nw_true,nw_eff);
+  t3_u3 = Array{Float64}(nuvcoord_t3*nw_true,nw_eff);
+  t3_v3 = Array{Float64}(nuvcoord_t3*nw_true,nw_eff);
   for u=1:nuvcoord_t3
     t3_u1[nw_true*(u-1)+1:nw_true*u,1] = t3_u1coord[u]*1./lam;
     t3_v1[nw_true*(u-1)+1:nw_true*u,1] = t3_v1coord[u]*1./lam;
@@ -131,7 +134,7 @@ function read_oifits(oifitsfile, grey=true)
   end
   nt3amp = length(t3amp_data);
   nt3phi = length(t3phi_data);
-  baseline_t3 = vec((sqrt(t3_u1.^2+t3_v1.^2).*sqrt(t3_u2.^2+t3_v2.^2).*sqrt(t3_u3.^2+t3_v3.^2)).^(1./3.));
+  baseline_t3 = vec((sqrt.(t3_u1.^2+t3_v1.^2).*sqrt.(t3_u2.^2+t3_v2.^2).*sqrt.(t3_u3.^2+t3_v3.^2)).^(1./3.));
   t3_uv = hcat(vcat(t3_u1, t3_u2, t3_u3), vcat(t3_v1, t3_v2, t3_v3))'; #need under this form for nfft
 
   # Merge observable uv points -- TBD: test for uniqueness to improve performance
@@ -143,4 +146,16 @@ function read_oifits(oifitsfile, grey=true)
   indx_t3_3 = nv2+(2*nt3amp+1:3*nt3amp);
 
   data = OIdata(nuv, full_uv, nw_eff,indx_v2,indx_t3_1,indx_t3_2,indx_t3_3,nv2,nt3amp,nt3phi,v2_data,v2_data_err,t3amp_data,t3amp_data_err,t3phi_data,t3phi_data_err, baseline_v2,baseline_t3, mean_mjd);
+end
+
+function readoifits_multiepochs(oifitsfiles)
+nepochs = length(oifitsfiles);
+tepochs = Array{Float64}(nepochs);
+data = Array{OIdata}(nepochs);
+for i=1:nepochs
+  data[i] = read_oifits(oifitsfiles[i]);
+  tepochs[i] = data[i].mean_mjd;
+  println(oifitsfiles[i], "\t MJD: ", tepochs[i], "\t nV2 = ", data[i].nv2, "\t nT3amp = ", data[i].nt3amp, "\t nT3phi = ", data[i].nt3phi);
+end
+return nepochs, tepochs, data
 end

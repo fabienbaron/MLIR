@@ -1,11 +1,12 @@
 using FITSIO;
 using PyPlot;
-using Lbfgsb;
+using OptimPack;
 PyPlot.show();
 include("readoifits.jl")
 include("oichi2.jl")
 include("oiplot.jl")
 include("EPLL.jl");
+include("initial.jl")
 dict = importGMM("GMM_YSO.mat");
 oifitsfile = "2004-data1.oifits";
 pixellation = 0.101; # in mas

@@ -15,8 +15,8 @@ function importGMM(filename)
   vars = get(matread(filename), "GMM", 0);
   #clumsy
   covs = get(vars, "covs", 0);
-  invcovs = Array(Float64,size(covs));
-  chols = Array( typeof(covs[:,:,1]), size(covs,3));
+  invcovs = Array{Float64}(size(covs));
+  chols = Array{typeof(covs[:,:,1])}(size(covs,3));
   for i=1:size(covs,3)
   invcovs[:,:,i]=inv(covs[:,:,i]);
   end

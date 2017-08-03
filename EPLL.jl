@@ -6,7 +6,7 @@ function loggausspdf2(X, sigma)
   d = size(X,1);
   R = chol(sigma);
   q = sum((R'\X).^2, 1);  # quadratic term (M distance)
-  c = d*log(2.0*pi)+2.0*sum(log(diag(R)));   # normalization constant
+  c = d*log(2.0*pi)+2.0*sum(log.(diag(R)));   # normalization constant
   y = -(c+q)/2;
 end
 
@@ -14,7 +14,7 @@ function loggausspdf3(X, R)
   # log pdf of Gaussian with zero mean
   d = size(X,1);
   q = sum((R'\X).^2, 1);  # quadratic term (M distance)
-  c = d*log(2.0*pi)+2.0*sum(log(diag(R)));   # normalization constant
+  c = d*log(2.0*pi)+2.0*sum(log.(diag(R)));   # normalization constant
   y = -(c+q)/2;
 end
 
@@ -36,9 +36,9 @@ function logsumexp(X)
   for i=1:size(Z,2)
     @inbounds Z[:,i] -= Y[i];
   end
-  S = Y + log(sum(exp(Z),1));
-  i = find(~isfinite(Y));
-  if ~isempty(i)
+  S = Y + log.(sum(exp.(Z),1));
+  i = find(.~isfinite.(Y));
+  if .~isempty(i)
     S[i] = Y[i];
   end
   S
@@ -161,7 +161,7 @@ function EPLLhalfQuadraticSplit(noisy_image,lambda,patchSize,betas,T, MAPGMM, tr
     figure(3); imshow(current_image, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
     psnr = 20*log10(1/std(current_image-true_image));
     println("PSNR: ", psnr);
-    println("l1 distance: ", sum(abs(current_image-true_image))/length(true_image), "\n");
+    println("l1 distance: ", sum(abs.(current_image-true_image))/length(true_image), "\n");
   end
   #% clip values to be between 1 and 0, hardly changes performance
   current_image[current_image.>1]=1;
@@ -242,7 +242,7 @@ function initial_rho(z, u, dft, data)
   rhorange = 10.^linspace(-20, 20, 41);
   oldchi2try = 1e99;
   for i=1:41
-    chi2try = chi2(z[1,:]-u[1,:]/rhorange[i], dft, data, false);
+    chi2try = chi2_f(z[1,:]-u[1,:]/rhorange[i], dft, data, false);
     println("rho:", rhorange[i], "   chi2: ", chi2try);
     if (i == 1)
       rho = rhorange[i];
@@ -254,19 +254,10 @@ function initial_rho(z, u, dft, data)
   return rho
 end
 
-function initial_image(fwhm)
-x_start = Array(Float64, nx, nx)
-for i=1:nx
-  for j=1:nx
-      x_start[i,j] = exp(-((i-(nx+1)/2)^2+(j-(nx+1)/2)^2)/(2*(fwhm/2.355)^2));
-  end
-end
-x_start = vec(x_start)/sum(x_start);
-end
 
 function step2(zinit, zt, dft, data, alpha)
 crit = (z,g)->fdata_admm(z, g, dft, data, alpha, zt);
-f, zopt, numCall, numIter, status = lbfgsb(crit, zinit, lb=zeros(size(zinit)), ub=ones(size(zinit)), maxiter=10, iprint=1);
+x = OptimPack.vmlmb(crit, zinit, verb=true, lower=0, upper=1, maxiter=10, blmvm=false);
 return zopt
 end
 
