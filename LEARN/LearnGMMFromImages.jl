@@ -1,10 +1,9 @@
 using FITSIO
-include("removeDC.jl")
-include("RandPatchesFromImagesCell.jl")
+#Threads.nthreads()
 include("OnlineGMMEM.jl")
 PyPlot.show()
 PatchSize = 8;
-nmodels = 15;
+nmodels = 50;
 MiniBatchSize = 5000;
 output_dict = "GMM_$(PatchSize)x$(PatchSize)_$(nmodels)_$(MiniBatchSize).jld";
 Images = Array{Array{Float64, 2}}(3);
@@ -16,7 +15,7 @@ Images[3] = read((FITS("2004true137.fits"))[1]);
 
 DataSource = N->removeDC(RandPatchesFromImagesCell(N,PatchSize,Images))
 GMM0 = nmodels #note: we can also initialize with a previous model
-NumIterations = 50
+NumIterations = 1000
 OutputFile = output_dict
 T0 = 500
 alpha = 0.6
