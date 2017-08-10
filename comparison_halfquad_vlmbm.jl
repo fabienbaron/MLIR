@@ -44,6 +44,9 @@ g = zeros(size(xstart));
 crit = (x,g)->denoise_fg(x, g, data, noiseSD, GDict);figure(4);
 figure(4);
 x = OptimPack.vmlmb(crit, xstart, verb=true, lower=0, upper=1, maxiter=200, blmvm=false);
-imshow(reshape(x, size(noisy_image)), ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
-
+reconstructed_image = reshape(x, size(noisy_image));
+println("PSNR: ",20*log10(1/std(reconstructed_image-true_image)), "\n");
+println("EPLL: ", EPLL(reconstructed_image, GDict), "\n");
+println("l1dist: ", sum(abs.(reconstructed_image-true_image))/length(true_image), "\n");
+imshow(reconstructed_image, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
 readline();

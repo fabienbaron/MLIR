@@ -283,7 +283,7 @@ px = im2col(x_2d,(patchsize,patchsize));
 lag_f = beta*sum((px-z).^2);
 lag_g = 2.*beta*vec(col2im(px-z, (patchsize, patchsize), (nx,nx), "sliding", "sum"));
 g[:] = squeeze(g_v2 + g_t3amp + g_t3phi,1) + lag_g;
-g[:] = (g - sum(x.*g) / flux ) / flux + lag_g; # gradient correction to take into account the non-normalized image
+g[:] = (g - sum(x.*g) / flux ) / flux ; # gradient correction to take into account the non-normalized image
 println("V2: ", chi2_v2/data.nv2, " T3A: ", chi2_t3amp/data.nt3amp, " T3P: ", chi2_t3phi/data.nt3phi," Flux: ", flux, " LAG: ", lag_f);
 return (chi2_v2 + chi2_t3amp + chi2_t3phi) + lag_f
 end
