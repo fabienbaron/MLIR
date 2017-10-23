@@ -9,14 +9,14 @@
 #end
 
 function setup_dft(data, nx, pixsize)
-  scale_rad = pixsize * (pi / 180.0) / 3600000.0;
-  dft = zeros(Complex{Float64}, data.nuv, nx*nx);
-  xvals = -2 * pi * scale_rad * ([(mod(i-1,nx)+1) for i=1:nx*nx] - (nx+1)/2);
-  yvals=  -2 * pi * scale_rad * ([(div(i-1,nx)+1) for i=1:nx*nx] - (nx+1)/2);
-  for uu=1:data.nuv
+scale_rad = pixsize * (pi / 180.0) / 3600000.0;
+dft = zeros(Complex{Float64}, data.nuv, nx*nx);
+xvals = -2 * pi * scale_rad * ([(mod(i-1,nx)+1) for i=1:nx*nx] - (nx+1)/2);
+yvals=  -2 * pi * scale_rad * ([(div(i-1,nx)+1) for i=1:nx*nx] - (nx+1)/2);
+for uu=1:data.nuv
     dft[uu,:] = cis.( (data.uv[1,uu] * xvals + data.uv[2,uu] * yvals));
-  end
-  return dft
+end
+return dft
 end
 
 function setup_nfft(data, nx, pixsize)
@@ -39,6 +39,7 @@ function cvis_to_t3(cvis, indx1, indx2, indx3)
   t3phi = angle.(t3)*180./pi;
   return t3, t3amp, t3phi
 end
+
 
 function image_to_cvis_dft(x, dft)
   cvis_model = Array{Complex{Float64}}(size(dft, 1));
@@ -117,11 +118,10 @@ function reg_centering(x,g) # takes a 1D array
   return f
 end
 
-function chi2_centered_fg(x, g, dft, data )
-  #tic();
-  cvis_model = image_to_cvis_dft(x, dft);
-  #toc();
-  flux = sum(x);
+function chi2_centered_fg(x, g, mu, dft, data )
+flux = sum(x);
+cvis_model = image_to_cvis_dft(x, dft);
+# cvis_model = image_to_cvis_nfft(x, fft);
   # compute observables from all cvis
   #tic();
   v2_model = cvis_to_v2(cvis_model, data.indx_v2);
@@ -129,22 +129,25 @@ function chi2_centered_fg(x, g, dft, data )
   chi2_v2 = sum( ((v2_model - data.v2_data)./data.v2_data_err).^2);
   chi2_t3amp = sum( ((t3amp_model - data.t3amp_data)./data.t3amp_data_err).^2);
   chi2_t3phi = sum( (mod360(t3phi_model - data.t3phi_data)./data.t3phi_data_err).^2);
-  #toc();
+
+# centering
   rho = 1e4
   reg_der = zeros(size(x))
   reg = reg_centering(x, reg_der)
+# L2
+  l2 = sum(x.^2)
+  l2_der = 2*x
   # note: this is correct but slower
   g_v2 = 4.0*sum(((v2_model-data.v2_data)./data.v2_data_err.^2).*real(conj(cvis_model[data.indx_v2]).*dft[data.indx_v2,:]),1);
   g_t3amp = 2.0*sum(((t3amp_model-data.t3amp_data)./data.t3amp_data_err.^2).*
   (   real( conj(cvis_model[data.indx_t3_1]./abs.(cvis_model[data.indx_t3_1])).*dft[data.indx_t3_1,:]).*abs.(cvis_model[data.indx_t3_2]).*abs.(cvis_model[data.indx_t3_3])       + real( conj(cvis_model[data.indx_t3_2]./abs.(cvis_model[data.indx_t3_2])).*dft[data.indx_t3_2,:]).*abs.(cvis_model[data.indx_t3_1]).*abs.(cvis_model[data.indx_t3_3])+ real( conj(cvis_model[data.indx_t3_3]./abs.(cvis_model[data.indx_t3_3])).*dft[data.indx_t3_3,:]).*abs.(cvis_model[data.indx_t3_1]).*abs.(cvis_model[data.indx_t3_2])),1);
-
   t3model_der = dft[data.indx_t3_1,:].*cvis_model[data.indx_t3_2].*cvis_model[data.indx_t3_3] + dft[data.indx_t3_2,:].*cvis_model[data.indx_t3_1].*cvis_model[data.indx_t3_3] + dft[data.indx_t3_3,:].*cvis_model[data.indx_t3_1].*cvis_model[data.indx_t3_2];
   g_t3phi =360./pi*sum(((mod360(t3phi_model-data.t3phi_data)./data.t3phi_data_err.^2)./abs2.(t3_model)).*(-imag(t3_model).*real(t3model_der)+real(t3_model).*imag(t3model_der)),1);
   imdisp(x)
-  g[1:end] = squeeze(g_v2 + g_t3amp + g_t3phi, 1) +  rho * reg_der;
+  g[1:end] = vec(g_v2 + g_t3amp + g_t3phi) +  rho * reg_der + mu * l2_der;
   g[1:end] = (g - sum(vec(x).*g) / flux ) / flux; # gradient correction to take into account the non-normalized image
-  println("V2: ", chi2_v2/data.nv2, " T3A: ", chi2_t3amp/data.nt3amp, " T3P: ", chi2_t3phi/data.nt3phi," Flux: ", flux, "CENT: ", reg, " CDG ", cdg(reshape(x,nx,nx)))
-  return chi2_v2 + chi2_t3amp + chi2_t3phi + rho *reg
+  println("V2: ", chi2_v2/data.nv2, " T3A: ", chi2_t3amp/data.nt3amp, " T3P: ", chi2_t3phi/data.nt3phi," Flux: ", flux, " CENT: ", reg, " CDG ", cdg(reshape(x,nx,nx)), " L2: ", mu*l2)
+  return chi2_v2 + chi2_t3amp + chi2_t3phi + rho *reg + mu * l2
 end
 
 function fdata_admm(z, g, dft, data, alpha, zt) # criterion with regularization
