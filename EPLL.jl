@@ -73,14 +73,12 @@ function EPLL_fg(x, g, GDict) # regularizer value plus gradient
   for i=1:npatches
     @inbounds patches[:,i] -= mean_patches[i];
   end
-
   Pmodels = zeros(round(Int, GDict.nmodels),size(patches,2));
   for k=1:nmodels
     Pmodels[k,:] = log(GDict.mixweights[k]) + loggausspdf2(patches,GDict.covs[:,:,k]);
   end
   P = logsumexp(Pmodels); # log p(PiX), hence vector of size=npatches
   f = -sum(P)/size(patches,2);
-
   GPmodels = zeros(round(Int, GDict.nmodels),(patchSize*patchSize), size(patches,2));
   for i=1:npatches
     for k=1:nmodels
@@ -93,17 +91,16 @@ function EPLL_fg(x, g, GDict) # regularizer value plus gradient
 end
 
 
-function prox_GMM(z0, sigma, dict)
+function prox_GMM(z0, alpha, dict)
   # proximal operator/resolvent for the EPLL prior
   # i.e. solution of:
   #   zhat = argmin{ alpha * EPPL(z) + 0.5*||z-z0||^2 }
   #       z - initial patches
   #      np - patch size
-  #   sigma - noise standard deviation
-  #  dict   - dictionary the gaussian mixture model structure
+  #   alpha - EPLL coefficient
+  #    dict - dictionary the gaussian mixture model structure
   np = Int(sqrt(size(z0,1)))
-  #W = sigma^2*eye(np^2);
-  W = sigma^2*eye(np^2);
+  W = alpha^2*eye(np^2);
   # remove DC component
   mean_z0 = mean(z0,1);
   broadcast!(-, z0, z0, mean_z0);
@@ -119,44 +116,207 @@ function prox_GMM(z0, sigma, dict)
   return zhat
 end
 
-function aprxMAPGMM(patches, patchSize, noiseSD, imsize, GS)
-  # approximate GMM MAP estimation - a single iteration of the "hard version"
-  # EM MAP procedure (see paper for a reference)
-  # Inputs:
-  #   patches - the noisy patches (in columns)
-  #   noiseSD - noise standard deviation
-  #   imsize - size of the original image (not used in this case, but may be
-  #   used for non local priors)
-  #   GS - the gaussian mixture model structure
-  #   excludeList - used only for inpainting, misleading name - it's a list
-  #   of patch indices to use for estimation, the rest are just ignored
-  #   SigmaNoise - if the noise is non-white, this is the noise covariance
-  #   matrix
-  # Outputs:
-  #   Xhat - the restored patches
-  # Supports general noise covariance matrices
-  SigmaNoise = noiseSD^2*eye(patchSize^2);
-  # remove DC component
-  mean_patches = mean(patches,1);
-  for i=1:size(patches,2)
-    @inbounds patches[:,i] -= mean_patches[i];
-  end
-  PYZ = mixturelog(GS, patches, SigmaNoise)
-  ks = ind2sub(size(PYZ), vec(findmax(PYZ,1)[2]))[1]'
-  Xhat = zeros(size(patches));
-  for i=1:Int(GS.nmodels)
-    inds = find(ks.==i);
-    Xhat[:,inds] = ( (GS.covs[:,:,i]+SigmaNoise)\(GS.covs[:,:,i]*patches[:,inds] + SigmaNoise*repmat(GS.means[:,i],1,length(inds)) ) );
-  end
-  for i=1:size(patches,2)
-    @inbounds Xhat[:,i] += mean_patches[i];
-  end
-  Xhat
-end
+#
+# function prox_GMM_grad(z0, alpha, dict)
+# using OptimPack
+# # gradient method
+# function prox_fg(z, g, alpha, z0)
+# chi2_f = 0.5*norm(z-z0)^2
+# chi2_g = z-z0;
+# nx = Int(sqrt(length(x)));
+# reg_g = zeros(Float64, (nx, nx));
+# reg_f = EPLL_fg(reshape(x, (nx,nx)), reg_g, dict);
+# g[:] = chi2_g + mu*vec(reg_g);
+# return chi2_f + mu*reg_f
+# end
+# g = zeros(size(z0));
+# crit = (z,g)->prox_fg(z, g, alpha, z0);
+# z = OptimPack.vmlmb(crit, copy(z0), verb=true, lower=0, maxiter=80, blmvm=false);
+# return z
+# end
+
+
+
+#
+# function aprxMAPGMM(patches, patchSize, noiseSD, imsize, GS)
+#   # approximate GMM MAP estimation - a single iteration of the "hard version"
+#   # EM MAP procedure (see paper for a reference)
+#   # Inputs:
+#   #   patches - the noisy patches (in columns)
+#   #   noiseSD - noise standard deviation
+#   #   imsize - size of the original image (not used in this case, but may be
+#   #   used for non local priors)
+#   #   GS - the gaussian mixture model structure
+#   #   excludeList - used only for inpainting, misleading name - it's a list
+#   #   of patch indices to use for estimation, the rest are just ignored
+#   #   SigmaNoise - if the noise is non-white, this is the noise covariance
+#   #   matrix
+#   # Outputs:
+#   #   Xhat - the restored patches
+#   # Supports general noise covariance matrices
+#   SigmaNoise = noiseSD^2*eye(patchSize^2);
+#   # remove DC component
+#   mean_patches = mean(patches,1);
+#   for i=1:size(patches,2)
+#     @inbounds patches[:,i] -= mean_patches[i];
+#   end
+#   PYZ = mixturelog(GS, patches, SigmaNoise)
+#   ks = ind2sub(size(PYZ), vec(findmax(PYZ,1)[2]))[1]'
+#   Xhat = zeros(size(patches));
+#   for i=1:Int(GS.nmodels)
+#     inds = find(ks.==i);
+#     Xhat[:,inds] = ( (GS.covs[:,:,i]+SigmaNoise)\(GS.covs[:,:,i]*patches[:,inds] + SigmaNoise*repmat(GS.means[:,i],1,length(inds)) ) );
+#   end
+#   for i=1:size(patches,2)
+#     @inbounds Xhat[:,i] += mean_patches[i];
+#   end
+#   Xhat
+# end
+
+
+
 
 
 using StatsBase
-function EPLLhalfQuadraticSplit(y, sigma, np, betas, prox, x_true, dict)
+#
+#
+# using StatsBase
+# function EPLLhalfQuadraticSplit(noisy_image,lambda,patchSize,betas,T, MAPGMM, true_image)
+#   #% estimate the "real" noise standard deviation from lambda
+#   RealNoiseSD = sqrt(1/(lambda/patchSize^2));
+#   # initialize with the noisy image
+#   image_size = size(noisy_image)
+#   current_image = copy(noisy_image);
+#   mm = size(true_image,1);
+#   nn = size(true_image,2);
+#   temp = im2col( reshape(1:(mm*nn),mm,nn),(patchSize,patchSize));
+#
+#   #% go through all values of noise levels
+#   for b=betas
+#     println("beta = ", b, "\n")
+#     # Z step, extract all overlapping patches from the current image estimate
+#     patches = im2col(current_image,(patchSize,patchSize));
+#     #       calculate the MAP estimate for patches using the given prior
+#     MAPpatches = MAPGMM(patches, patchSize, b^-0.5,image_size);
+#     #         X step, average the pixels in MAPpatches
+#     avg = counts(temp[:],WeightVec(MAPpatches[:]))./counts(temp[:]);
+#     #       and calculate the current estimate for the clean image
+#     #avg[avg.<0]=0;
+#     current_image = noisy_image*lambda/(lambda+b*patchSize^2) + reshape(avg', mm, nn)*(b*patchSize^2/(lambda+b*patchSize^2));
+#     #        current_image[current_image.>1]=1;
+#     #        current_image[current_image.<0]=0;
+#
+#     figure(3); imshow(current_image, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
+#     psnr = 20*log10(1/std(current_image-true_image));
+#     println("PSNR: ", psnr);
+#     println("l1 distance: ", sum(abs.(current_image-true_image))/length(true_image), "\n");
+#   end
+#   #% clip values to be between 1 and 0, hardly changes performance
+#   current_image[current_image.>1]=1;
+#   current_image[current_image.<0]=0;
+#
+#   return current_image
+# end
+
+#
+# function EPLL_denoise_1D(noisy_image,noiseSD,dict)
+#   patchSize = Int(sqrt(dict.dim));
+#   beta = (1/noiseSD^2.0)*[1 4 8 16 32 64 128 256 512 1024 2048 4000 8000 20000 40000];
+#   lambda = patchSize^2/noiseSD^2;
+#   mm = Int(sqrt(size(noisy_image,1)));
+#   nn = Int(sqrt(size(noisy_image,1)));
+#   init_image = reshape(noisy_image, (mm,nn));
+#   xmin = minimum(init_image);
+#   xmax = maximum(init_image);
+#   init_image  = (init_image - xmin)/xmax;
+#   current_image = copy(init_image);
+#   imsize = size(current_image);
+#   MAPGMM = (Z,patchSize,noiseSD,imsize)->aprxMAPGMM(Z,patchSize,noiseSD,imsize,dict);
+#   temp = im2col( reshape(1:(mm*nn),mm,nn),(patchSize,patchSize));
+#   for b=beta
+#     println("beta = ", b, "\n")
+#     # Z step, extract all overlapping patches from the current image estimate
+#     patches = im2col(current_image,(patchSize,patchSize));
+#     # calculate the MAP estimate for patches using the given prior
+#     MAPpatches = MAPGMM(patches, patchSize, b^-0.5,imsize);
+#     #  X step, average the pixels in MAPpatches
+#     avg = counts(temp[:],WeightVec(MAPpatches[:]))./counts(temp[:]);
+#     #  and calculate the current estimate for the clean image
+#     current_image = init_image*lambda/(lambda+b*patchSize^2) + reshape(avg', mm, nn)*(b*patchSize^2/(lambda+b*patchSize^2));
+#     figure(2); imshow(current_image, ColorMap("gist_heat"), interpolation="none");PyPlot.draw();PyPlot.pause(0.05);
+#   end
+#   #% clip values to be between 1 and 0, hardly changes performance
+#   current_image[current_image.>1]=1;
+#   current_image[current_image.<0]=0;
+#   return (current_image*xmax+xmin)
+# end
+#
+#
+#
+# function EPLL_denoise_2D(noisy_image,noiseSD,dict)
+#   patchSize = Int(sqrt(dict.dim));
+#   beta = (1/noiseSD^2.0)*[1 4 8 16 32 64 128 256 512 1024 2048 4000 8000 20000 40000];
+#   lambda = patchSize^2/noiseSD^2;
+#   mm = size(noisy_image,1);
+#   nn = size(noisy_image,2);
+#   current_image = copy(noisy_image);
+#   imsize = size(current_image);
+#   temp = im2col( reshape(1:(mm*nn),mm,nn),(patchSize,patchSize));
+#   for b=beta
+#     println("beta = ", b, "\n")
+#     # Z step, extract all overlapping patches from the current image estimate
+#     patches = im2col(current_image,(patchSize,patchSize));
+#     # calculate the MAP estimate for patches using the given prior
+#     MAPpatches = aprxMAPGMM(patches,patchSize,b^-0.5,imsize,dict);
+#     #  X step, average the pixels in MAPpatches
+#     avg = counts(temp[:],WeightVec(MAPpatches[:]))./counts(temp[:]);
+#     #  and calculate the current estimate for the clean image
+#     current_image = noisy_image*lambda/(lambda+b*patchSize^2) + reshape(avg', mm, nn)*(b*patchSize^2/(lambda+b*patchSize^2));
+#     figure(2); imshow(current_image, ColorMap("gist_heat"), interpolation="none");PyPlot.draw();PyPlot.pause(0.05);
+#   end
+#   #% clip values to be between 1 and 0, hardly changes performance
+#   current_image[current_image.>1]=1;
+#   current_image[current_image.<0]=0;
+#   return current_image
+# end
+#
+#
+#
+#
+
+# function EPLLhalfQuadraticSplit(noisy_image,lambda,patchSize,betas,T, MAPGMM, true_image)
+#   #% estimate the "real" noise standard deviation from lambda
+#   RealNoiseSD = sqrt(1/(lambda/patchSize^2));
+#   # initialize with the noisy image
+#   image_size = size(noisy_image)
+#   current_image = copy(noisy_image);
+#   mm = size(true_image,1);
+#   nn = size(true_image,2);
+#   temp = im2col( reshape(1:(mm*nn),mm,nn),(patchSize,patchSize));
+#
+#   #% go through all values of noise levels
+#   for b=betas
+#     println("beta = ", b, "\n")
+#     # Z step, extract all overlapping patches from the current image estimate
+#     patches = im2col(current_image,(patchSize,patchSize));
+#     #       calculate the MAP estimate for patches using the given prior
+#     MAPpatches = MAPGMM(patches, patchSize, b^-0.5,image_size);
+#     #         X step, average the pixels in MAPpatches
+#     avg = counts(temp[:],WeightVec(MAPpatches[:]))./counts(temp[:]);
+#     current_image = noisy_image*lambda/(lambda+b*patchSize^2) + reshape(avg', mm, nn)*(b*patchSize^2/(lambda+b*patchSize^2));
+#   #  figure(3); imshow(current_image, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
+#     psnr = 20*log10(1/std(current_image-true_image));
+#     println("PSNR: ", psnr);
+#     println("l1 distance: ", sum(abs.(current_image-true_image))/length(true_image), "\n");
+#   end
+#   #% clip values to be between 1 and 0, hardly changes performance
+#   current_image[current_image.>1]=1;
+#   current_image[current_image.<0]=0;
+#
+#   return current_image
+# end
+
+function EPLLhalfQuadraticSplitNew(y::Array{Float64,2}, sigma::Float64, np::Int64, betas::Array{Float64,1}, x_true::Array{Float64,2}, dict::GMM)
   # initialize with the noisy image
   x = copy(y);
   nx = size(x_true,1);
@@ -164,14 +324,17 @@ function EPLLhalfQuadraticSplit(y, sigma, np, betas, prox, x_true, dict)
   precalc2 = counts(precalc1);
   P=a->im2col(a,(np,np)); # decomposition into patches
   Pt=a->reshape( ( counts(precalc1,fweights(vec(a)))./precalc2 )', (nx, nx)); # transpose
+  λ = 1/sigma^2;
   #% go through all values of noise levels
-  for b=betas
-    println("beta = ", b, "\n")
+  for β=betas
+    println("beta = ", β, "\n")
     # Z step, extract all overlapping patches from the current image estimate, then calculate the resolvent
-    z = prox(P(x), sigma/sqrt(b), dict);
+    #z = MAPGMM(P(x), np, sigma/sqrt(b), size(y));
+    z = prox_GMM(P(x), 1/sqrt(β), dict);
     # X step, average the pixels in MAPpatches and calculate the current estimate for the clean image
-    x = (y + Pt(z)*b)/(1+b);
+    x = (λ*y + β*Pt(z))/(λ+β);
     figure(3); imshow(x, ColorMap("gist_heat"));PyPlot.draw();PyPlot.pause(0.05);
+    println("EPLL: ", EPLL(x, dict), "\t F: ",  1/sigma^2*norm(x-y)^2+EPLL(x, dict));
     psnr = 20*log10(1/std(x-x_true));
     println("PSNR: ", psnr);
     println("l1 distance: ", sum(abs.(x-x_true))/length(x_true), "\n");
@@ -182,7 +345,7 @@ function EPLLhalfQuadraticSplit(y, sigma, np, betas, prox, x_true, dict)
   return x
 end
 
-function chi2andlag_fg(x, g, dft, data, z, beta) # criterion function plus its gradient w/r x
+function chi2andlag_fg(x, g, dft, data, z, beta) # criterion function plus its gradient w/r x#
 #nx2 = length(x);
 cvis_model = image_to_cvis(x, dft);
 # compute observables from all cvis
