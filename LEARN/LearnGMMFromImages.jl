@@ -10,8 +10,8 @@ Images = Array{Array{Float64, 2}}(3);
 #% Note: FITS images need to be rescaled to range 0-1
 # Also better crop to non-zero flux than to use the true flag in OnlineGMMEM
 Images[1] = read((FITS("2004true137.fits"))[1]);
-Images[2] = read((FITS("2004true137.fits"))[1]);
-Images[3] = read((FITS("2004true137.fits"))[1]);
+Images[2] = rotl90(read((FITS("2004true137.fits"))[1]));
+Images[3] = rotr90(read((FITS("2004true137.fits"))[1]));
 
 DataSource = N->removeDC(RandPatchesFromImagesCell(N,PatchSize,Images))
 GMM0 = nmodels #note: we can also initialize with a previous model
