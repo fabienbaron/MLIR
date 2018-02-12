@@ -1,5 +1,6 @@
 using FITSIO;
 using PyPlot;
+using JLD;
 #using OptimPack
 PyPlot.show();
 include("EPLL.jl");
@@ -10,7 +11,7 @@ x_true = rotl90(read((FITS("2004true137.fits"))[1])); #rotl90 to get same orient
 sigma = 100/255;
 x_noisy = x_true + sigma*randn(size(x_true));
 # load the machine-learned dictionary and setup corresponding patch size
-dict = importGMM("GMM_YSO.mat");
+dict = load("GMM_YSO.jld", "GMM");
 np = Int(sqrt(dict.dim));
 #setup the regularization step for ADMM
 MAPGMM = (Z,np,sigma,imsize)->aprxMAPGMM(Z,np,sigma,imsize,dict);

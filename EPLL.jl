@@ -1,6 +1,14 @@
-include("importgmm.jl")
-include("blockproc.jl")
+mutable struct GMM
+  nmodels::Float64
+  dim::Float64
+  covs::Array{Float64,3}
+  invcovs::Array{Float64,3}
+  chols::Array{Array{Float64,2},1}
+  mixweights::Array{Float64,1}
+  means::Array{Float64,2}
+end
 
+include("blockproc.jl")
 function loggausspdf2(X, sigma)
   # log pdf of Gaussian with zero mean
   d = size(X,1);

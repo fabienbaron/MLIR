@@ -15,7 +15,7 @@ Images[3] = rotr90(read((FITS("2004true137.fits"))[1]));
 
 DataSource = N->removeDC(RandPatchesFromImagesCell(N,PatchSize,Images))
 GMM0 = nmodels #note: we can also initialize with a previous model
-NumIterations = 1000
+NumIterations = 200
 OutputFile = output_dict
 T0 = 500
 alpha = 0.6

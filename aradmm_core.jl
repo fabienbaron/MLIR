@@ -166,6 +166,7 @@ for iter = 1:maxiter
     Bv1 = copy(Bv);
     v1 = copy(v);
     l1 = copy(l);
+    imshow(u);
 end
 
 outs = outinfo(pres[1:iter], #primal residual

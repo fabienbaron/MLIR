@@ -5,12 +5,11 @@ mutable struct GMM
   nmodels::Float64
   dim::Float64
   covs::Array{Float64,3}
-  #  invcovs::Array{Float64,3}
-  #  chols
+  invcovs::Array{Float64,3}
+  chols::Array{Array{Float64,2},1}
   mixweights::Array{Float64,1}
   means::Array{Float64,2}
 end
-
 # Removes DC component from image patches
 # Data given as a matrix where each patch is one column vectors
 # That is, the patches are vectorized.
@@ -137,7 +136,8 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
     K = GMMopt.nmodels;
   else #GMM0 was only the number of models
     K = GMM0;
-    GMMopt = GMM(K, size(DataSource(1),1), zeros(size(DataSource(1),1),size(DataSource(1),1),K), zeros(K), zeros(size(DataSource(1),1),K));
+    GMMopt = GMM(K, size(DataSource(1),1), zeros(size(DataSource(1),1),size(DataSource(1),1),K), zeros(size(DataSource(1),1),size(DataSource(1),1),K), Array{Array{Float64, 2}}(K), zeros(K), zeros(size(DataSource(1),1),K));
+#    GMMopt = GMM(K, size(DataSource(1),1), zeros(size(DataSource(1),1),size(DataSource(1),1),K), zeros(K), zeros(size(DataSource(1),1),K));
   end
 
   llh = zeros(NumIterations);
@@ -258,11 +258,21 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
     yscale("log")
     plot(sort(GMMopt.mixweights,rev=true), linestyle="-",marker="o", color="black");
     title("GMM mixweights")
-    PyPlot.draw();PyPlot.pause(0.01);
+    if mod(t,5)==0
+      PyPlot.draw();PyPlot.pause(0.01);
+    end
   if mod(t,20)==0
     println("Saving status in ",OutputFile,"\n");
     save(OutputFile,"GMM",GMMopt, "t",t, "NumIterations",NumIterations,"eta",eta, "MiniBatchSize",MiniBatchSize, "llh",llh,"alpha",alpha,"T0", T0);
   end # end of for loop on iteration number
 end
+
+  GMMopt.invcovs = Array{Float64}(size(GMMopt.covs));
+  GMMopt.chols = Array{typeof(GMMopt.covs[:,:,1])}(size(GMMopt.covs,3));
+  for i=1:size(GMMopt.covs,3)
+    GMMopt.invcovs[:,:,i]=inv(GMMopt.covs[:,:,i]);
+    GMMopt.chols[i]=chol(GMMopt.covs[:,:,i]);
+  end
+  save(OutputFile,"GMM",GMMopt, "t", NumIterations, "NumIterations",NumIterations,"eta",eta, "MiniBatchSize",MiniBatchSize, "llh",llh,"alpha",alpha,"T0", T0);
   return GMMopt,llh
 end
