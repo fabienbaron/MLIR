@@ -49,7 +49,7 @@ end
 return S
 end
 
-function EPLL(x, GDict) # regularizer value
+function EPLL(x, GDict) # regularizer value where x is the image
   patchSize = Int(sqrt(GDict.dim));
   xmin = minimum(x);
   xmax = maximum(x);
@@ -63,10 +63,21 @@ function EPLL(x, GDict) # regularizer value
   for k=1:Int(GDict.nmodels)
     Pmodels[k,:] = log(GDict.mixweights[k]) + loggausspdf2(patches,GDict.covs[:,:,k]);
   end
-  P = logsumexp(Pmodels);
-  f=-sum(P)/size(patches,2)
+  return -sum(logsumexp(Pmodels))/size(patches,2)
 end
 
+function EPLLz(z, GDict) # regularizer valuen when z are the patches (= image already decomposed)
+  patches = deepcopy(z);
+  mean_patches = mean(patches,1);
+  for i=1:size(patches,2)
+    @inbounds patches[:,i] -= mean_patches[i];
+  end
+  Pmodels = zeros(round(Int, GDict.nmodels),size(patches,2));
+  for k=1:Int(GDict.nmodels)
+    Pmodels[k,:] = log(GDict.mixweights[k]) + loggausspdf2(patches,GDict.covs[:,:,k]);
+  end
+  return -sum(logsumexp(Pmodels))/size(patches,2)
+end
 
 
 function EPLL_fg(x, g, GDict) # regularizer value plus gradient
@@ -324,15 +335,19 @@ using StatsBase
 #   return current_image
 # end
 
-function EPLLhalfQuadraticSplitNew(y::Array{Float64,2}, sigma::Float64, np::Int64, betas::Array{Float64,1}, x_true::Array{Float64,2}, dict::GMM)
-  # initialize with the noisy image
-  x = copy(y);
-  nx = size(x_true,1);
+function HQ_EPLL(dict::GMM, y::Array{Float64,2}, sigma::Float64, betas::Array{Float64,1}, x_true::Array{Float64,2})
+  # Setup Patch projection
+  np = Int(sqrt(dict.dim));
+  nx = size(y,1);
+  println("Reconstruction with np= ", np, " and nmodels= ", dict.nmodels);
   precalc1 = vec(im2col( reshape(1:(nx*nx),nx,nx),(np,np)));
   precalc2 = counts(precalc1);
   P=a->im2col(a,(np,np)); # decomposition into patches
   Pt=a->reshape( ( counts(precalc1,fweights(vec(a)))./precalc2 )', (nx, nx)); # transpose
   λ = 1/sigma^2;
+
+  # initialize with the noisy image
+  x = copy(y);
   #% go through all values of noise levels
   for β=betas
     println("beta = ", β, "\n")
@@ -342,7 +357,7 @@ function EPLLhalfQuadraticSplitNew(y::Array{Float64,2}, sigma::Float64, np::Int6
     # X step, average the pixels in MAPpatches and calculate the current estimate for the clean image
     x = (λ*y + β*Pt(z))/(λ+β);
     figure(3); imshow(x, ColorMap("gist_heat"));PyPlot.draw();PyPlot.pause(0.05);
-    println("EPLL: ", EPLL(x, dict), "\t F: ",  1/sigma^2*norm(x-y)^2+EPLL(x, dict));
+    println("Chi2: " , 1/sigma^2*norm(x[:]-y[:])^2, "EPLL: ", EPLL(x, dict), "Res: ", β*norm(P(x)-z)^2, "Crit: ",  1/sigma^2*norm(x[:]-y[:])^2+β*norm(P(x)-z)^2+EPLL(x, dict));
     psnr = 20*log10(1/std(x-x_true));
     println("PSNR: ", psnr);
     println("l1 distance: ", sum(abs.(x-x_true))/length(x_true), "\n");

@@ -27,9 +27,9 @@ Pt=a->reshape( ( counts(precalc1,fweights(vec(a)))./precalc2 )', (nx, nx)); # tr
 # mu/2 ||u-f||^2
 h = x -> 0.5*mu*norm(x[:]-x_data[:])^2;  #regression term
 #lam1 |x|
-g = x -> lam1*EPLL(x, dict); #regularizer
+g = x -> lam1*EPLLz(x, dict); #regularizer form (warning, typically works on Px, not x)
 #objective
-obj = (u, v) -> h(u)+g(u);
+obj = (u, v) -> h(u)+g(P(u));
 # min mu/2 ||u-f||^2 + t/2 ||-A(u) + v + l/t||^2
 #  opt condition:  (mu + t A'A)*u = mu*f + A'(t*v+l)
 solvh = (v, l, t) -> (mu*x_data+Pt(t*v+l))/(mu+t); #update u
