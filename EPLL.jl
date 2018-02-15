@@ -335,7 +335,7 @@ using StatsBase
 #   return current_image
 # end
 
-function HQ_EPLL(dict::GMM, y::Array{Float64,2}, sigma::Float64, betas::Array{Float64,1}, x_true::Array{Float64,2})
+function HQ_EPLL(dict::GMM, y::Array{Float64,2}, sigma::Float64, x_true::Array{Float64,2})
   # Setup Patch projection
   np = Int(sqrt(dict.dim));
   nx = size(y,1);
@@ -348,8 +348,9 @@ function HQ_EPLL(dict::GMM, y::Array{Float64,2}, sigma::Float64, betas::Array{Fl
 
   # initialize with the noisy image
   x = copy(y);
+  βrange = 2.^linspace(0,20);
   #% go through all values of noise levels
-  for β=betas
+  for β=βrange
     println("beta = ", β, "\n")
     # Z step, extract all overlapping patches from the current image estimate, then calculate the resolvent
     #z = MAPGMM(P(x), np, sigma/sqrt(b), size(y));
@@ -357,7 +358,7 @@ function HQ_EPLL(dict::GMM, y::Array{Float64,2}, sigma::Float64, betas::Array{Fl
     # X step, average the pixels in MAPpatches and calculate the current estimate for the clean image
     x = (λ*y + β*Pt(z))/(λ+β);
     figure(3); imshow(x, ColorMap("gist_heat"));PyPlot.draw();PyPlot.pause(0.05);
-    println("Chi2: " , 1/sigma^2*norm(x[:]-y[:])^2, "EPLL: ", EPLL(x, dict), "Res: ", β*norm(P(x)-z)^2, "Crit: ",  1/sigma^2*norm(x[:]-y[:])^2+β*norm(P(x)-z)^2+EPLL(x, dict));
+    println("Chi2/Chi2r: " , 1/sigma^2*norm(x[:]-y[:])^2.*[1,1/length(y)], " EPLL: ", EPLL(x, dict), " βRes/Res: ", sum((P(x)-z).^2).*[β,1], " Crit: ",  1/sigma^2*norm(x[:]-y[:])^2+β*sum((P(x)-z).^2)+EPLL(x, dict));
     psnr = 20*log10(1/std(x-x_true));
     println("PSNR: ", psnr);
     println("l1 distance: ", sum(abs.(x-x_true))/length(x_true), "\n");

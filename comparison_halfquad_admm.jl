@@ -16,10 +16,8 @@ dict = load("GMM_YSO.jld", "GMM");
 figure(1);imshow(x_true, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
 figure(2);imshow(x_noisy, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
 figure(3);
-x_HQ = HQ_EPLL(dict, x_noisy,sigma, 1.0*[1,4,8,16,32,64,128,256,512,1024,2048,4000,8000,20000,40000,80000,160000,320000], x_true);
-imshow(x_HQ, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
-#readline();
-
+x_HQ = HQ_EPLL(dict, x_noisy,sigma, x_true);
+figure(3); imshow(x_HQ, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
 
 # ADMM method
 
