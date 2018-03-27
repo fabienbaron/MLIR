@@ -180,35 +180,29 @@ outs = outinfo(pres[1:iter], #primal residual
 return ((u,v,l), outs)
 end
 
-function curv_adaptive_BB(al_h, de_h)
-#adapive BB, reference: FASTA paper of Tom Golstein
-tmph = de_h/al_h; #correlation
+function curv_adaptive_BB(αSD, αMG)
+#adaptive BB, reference: FASTA paper of Tom Golstein
+tmph = αMG/αSD; #correlation
 if tmph > .5
-    tau_h = de_h;
+    tau_h = αMG;
 else
-    tau_h = al_h - 0.5*de_h;
+    tau_h = αSD - 0.5*αMG;
 end
 return tau_h
 end
 
 function aradmm_estimate(iter, tau, gamma, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, orthval, minval, verbose, gmh, gmg, gamma0)
 #inner product
-tmp = real(conj(Au-Au0).*(l_hat-l_hat0));
-ul_hat = sum(tmp);
-tmp = real(conj(Bv-Bv0).*(l-l0));
-vl = sum(tmp);
+ul_hat = sum(real(conj(Au-Au0).*(l_hat-l_hat0))); # <Δh,Δλhat>
+vl = sum(real(conj(Bv-Bv0).*(l-l0))); # <Δg,Δλ>
 
 #norm of lambda, lambda_hat
-tmp = l_hat-l_hat0;
-dl_hat = norm(vec(tmp));
-tmp = l-l0;
-dl = norm(vec(tmp));
+dl_hat = norm(vec(l_hat-l_hat0)); # ||Δλhat||
+dl = norm(vec(l-l0)); # ||Δλ||
 
 #norm of gradient change
-tmp = Au-Au0;
-du = norm(vec(tmp));
-tmp = Bv-Bv0;
-dv = norm(vec(tmp));
+du = norm(vec(Au-Au0)); # ||Δh||
+dv = norm(vec(Bv-Bv0)); # ||Δg||
 
 #flag to indicate whether the curvature can be estimated
 hflag = false;
@@ -217,33 +211,30 @@ gflag = false;
 #estimate curvature, only if it can be estimated
 #use correlation/othogonal to test whether can be estimated
 #use the previous stepsize when curvature cannot be estimated
-if ul_hat > orthval*du*dl_hat + minval
+if ul_hat > orthval*du*dl_hat + minval # αcorr = ul_hat/du/dl_hat
     hflag = true;
-    al_h = dl_hat^2/ul_hat;
-    de_h = ul_hat/du^2;
-    bb_h = curv_adaptive_BB(al_h, de_h);
+    αSD = dl_hat^2/ul_hat;
+    αMG = ul_hat/du^2;     # αMG
+    α = curv_adaptive_BB(αSD, αMG);
 end
-if vl > orthval*dv*dl + minval
+if vl > orthval*dv*dl + minval # βcorr = vl/dv/dl
     gflag = true;
-    al_g = dl^2/vl;
-    de_g = vl/dv^2;
-    bb_g = curv_adaptive_BB(al_g, de_g);
+    βSD = dl^2/vl; # βSD
+    βMG = vl/dv^2; # βMG
+    β = curv_adaptive_BB(βSD, βMG);
 end
 
 if hflag && gflag
-    ss_h = sqrt(bb_h);
-    ss_g = sqrt(bb_g);
-    gamma = min(1 + 2/(ss_h/ss_g+ss_g/ss_h), gamma0);
-    tau = ss_h*ss_g;
+    gamma = min(1 + 2*sqrt(α*β)/(α+β), gamma0);
+    tau = sqrt(α*β);
 elseif hflag
     gamma = copy(gmh); #1.9;
-    tau = copy(bb_h);
+    tau = copy(α);
 elseif gflag
     gamma = copy(gmg); #1.1;
-    tau = copy(bb_g);
+    tau = copy(β);
 else
     gamma = copy(gamma0); #1.5;
-    #tau = tau;
 end
 
 if verbose == 3
@@ -251,10 +242,10 @@ if verbose == 3
         @printf("(%d) <u, l>=%f, <v, l>=%f\n", iter, ul_hat, vl);
     end
     if hflag
-        @printf("(%d) corr_h=%f,  al_h=%f,  estimated tau=%f,  gamma=%f \n", iter,ul_hat/du/dl_hat, al_h, tau, gamma);
+        @printf("(%d) corr_h=%f,  αSD=%f,  estimated tau=%f,  gamma=%f \n", iter,ul_hat/du/dl_hat, αSD, tau, gamma);
     end
     if gflag
-        @printf("(%d) corr_g=%f,  al_g=%f,  tau=%f gamma=%f\n", iter,vl/dv/dl, al_g, tau, gamma);
+        @printf("(%d) corr_g=%f,  βSD=%f,  estimated tau=%f gamma=%f\n", iter,vl/dv/dl, βSD, tau, gamma);
     end
     if ~hflag && ~gflag
         @printf("(%d) no curvature, corr_h=%f, corr_g=%f, tau=%f,  gamma=%f\n", iter, ul_hat/du/dl_hat, vl/dv/dl, tau, gamma);
@@ -266,22 +257,16 @@ end
 ## AADMM spectral penalty parameter
 function aadmm_estimate(iter, tau, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, orthval, minval, verbose)
 #inner product
-tmp = real(conj(Au-Au0).*(l_hat-l_hat0));
-ul_hat = sum(tmp);
-tmp = real(conj(Bv-Bv0).*(l-l0));
-vl = sum(tmp);
+ul_hat = sum(real(conj(Au-Au0).*(l_hat-l_hat0)));# <Δh,Δλhat>
+vl = sum(real(conj(Bv-Bv0).*(l-l0)));# <Δg,Δλ>
 
 #norm of lambda, lambda_hat
-tmp = l_hat-l_hat0;
-dl_hat = norm(vec(tmp));
-tmp = l-l0;
-dl = norm(vec(tmp));
+dl_hat = norm(vec(l_hat-l_hat0)); # ||Δλhat||
+dl = norm(vec(l-l0)); # ||Δλ||
 
 #norm of gradient change
-tmp = Au-Au0;
-du = norm(vec(tmp));
-tmp = Bv-Bv0;
-dv = norm(vec(tmp));
+du = norm(vec(Au-Au0)); # ||Δh||
+dv = norm(vec(Bv-Bv0)); # ||Δg||
 
 #flag to indicate whether the curvature can be estimated
 hflag = false;
@@ -292,26 +277,26 @@ gflag = false;
 #use the previous stepsize when curvature cannot be estimated
 if ul_hat > orthval*du*dl_hat + minval
     hflag = true;
-    al_h = dl_hat^2/ul_hat;
-    de_h = ul_hat/du^2;
-    bb_h = curv_adaptive_BB(al_h, de_h);
+    αSD = dl_hat^2/ul_hat;
+    αMG = ul_hat/du^2;
+    α = curv_adaptive_BB(αSD, αMG);
 end
 if vl > orthval*dv*dl + minval
     gflag = true;
-    al_g = dl^2/vl;
-    de_g = vl/dv^2;
-    bb_g = curv_adaptive_BB(al_g, de_g);
+    βSD = dl^2/vl;
+    βMG = vl/dv^2;
+    β = curv_adaptive_BB(βSD, βMG);
 end
 
 #if curvature can be estimated for both terms, balance the two
 #if one of the curvature cannot be estimated, use the estimated one
 #or use the previous stepsize to estimate
 if hflag && gflag
-    tau = sqrt(bb_h*bb_g);
+    tau = sqrt(α*β);
 elseif hflag
-    tau = copy(bb_h);
+    tau = copy(α);
 elseif gflag
-    tau = copy(bb_g);
+    tau = copy(β);
     #else
     #tau = tau;
 end
@@ -319,10 +304,10 @@ end
 if verbose == 3
     @printf("(%d) <u, l>=%f, <v, l>=%f\n", iter, ul_hat, vl);
     if hflag
-        @printf("(%d) corr_h=%f,  al_h=%f,  estimated tau=%f \n", iter, ul_hat/du/dl_hat, al_h, tau);
+        @printf("(%d) corr_h=%f,  αSD=%f,  estimated tau=%f \n", iter, ul_hat/du/dl_hat, αSD, tau);
     end
     if gflag
-        @printf("(%d) corr_g=%f,  al_g=%f,  estimated tau=%f \n", iter, vl/dv/dl, al_g, tau);
+        @printf("(%d) corr_g=%f,  βSD=%f,  estimated tau=%f \n", iter, vl/dv/dl, βSD, tau);
     end
     if ~hflag && ~gflag
         @printf("(%d) no curvature, corr_h=%f, corr_g=%f, tau=%f \n", iter, ul_hat/du/dl_hat, vl/dv/dl, tau);

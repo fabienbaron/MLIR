@@ -348,7 +348,7 @@ function HQ_EPLL(dict::GMM, y::Array{Float64,2}, sigma::Float64, x_true::Array{F
 
   # initialize with the noisy image
   x = copy(y);
-  βrange = 2.^linspace(0,20);
+  βrange = 2.^linspace(0,35);
   #% go through all values of noise levels
   for β=βrange
     println("beta = ", β, "\n")

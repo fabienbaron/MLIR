@@ -44,10 +44,11 @@ figure(3); imshow(x, ColorMap("gist_heat"));PyPlot.draw();PyPlot.pause(0.05);
 # step 3
 u = u + t * (P(x) - z)
 println("Iteration $i \n");
-#readline()
-#rho = minimum([maxRho, rho*1.1]);
-println("PSNR: ",20*log10(1/std(x-x_true)), " l1dist: ", norm(x-x_true,1), " MSE: ", norm(x-x_true,2), "\n");
-println("EPLL: ", EPLL(x, dict), "\t F: ",  1/sigma^2*norm(x-x_noisy)^2+EPLL(x, dict));
+figure(3); imshow(x, ColorMap("gist_heat"));PyPlot.draw();PyPlot.pause(0.05);
+println("Chi2/Chi2r: " , 1/sigma^2*norm(x[:]-y[:])^2.*[1,1/length(y)], " EPLL: ", EPLL(x, dict), " Res: ", sum((P(x)-z).^2), " Crit: ",  1/sigma^2*norm(x[:]-y[:])^2+0.5*t*sum((P(x)-z).^2)+EPLL(x, dict));
+psnr = 20*log10(1/std(x-x_true));
+println("PSNR: ", psnr);
+println("l1 distance: ", sum(abs.(x-x_true))/length(x_true), "\n");
 end
 x_ADMM = copy(x);
 imshow(x_ADMM, ColorMap("gray"));PyPlot.draw();PyPlot.pause(0.05);
