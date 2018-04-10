@@ -15,12 +15,12 @@ res_scale::Float64  #residual balancing parameter
 γ::Float64 # relaxation hyperparameter
 end
 
-function aradmm_image_denoising(x_start::Array{Float64,2}, x_data::Array{Float64,2}, mu::Float64, lam1::Float64, opts::optsinfo)
+function aradmm_cvis_denoising(vis_given::Array{Complex64,2}, H, Ht, HtH, mu::Float64, lam1::Float64, opts::optsinfo)
 # demo total vational image denoising
-# minimize  mu/2 ||x-f||^2 + lam1 |\grad x|
+# minimize  mu/2 ||Hx-f||^2 + lam1 |\grad x|
 
 # stencil for gradient
-sx = zeros(size(x_data));
+sx = zeros(size(x_given));
 sy = zeros(size(sx));
 sx[1,1]=-1;
 sx[1,end]=1;
@@ -33,16 +33,18 @@ grad2d = X -> cat(3, ifft(fsx.*fft(X)), ifft(fsy.*fft(X)));
 grad2d_conj = G -> real(ifft( conj(fsx).*fft(G[:,:,1]) + conj(fsy).*fft(G[:,:,2]) ));
 
 # mu/2 ||u-f||^2
-h = x -> 0.5*mu*norm(x[:]-x_data[:])^2;  #regression term
+h = x -> 0.5*mu*sum(abs2.(H*x-vis_given));  #regression term
 #lam1 |x|
 g = x -> lam1*norm(x[:],1); #regularizer
 #objective
 obj = (u, v) -> h(u)+g(grad2d(u));
-# min mu/2 ||u-f||^2 + t/2 ||-A(u) + v + l/t||^2
-#  opt condition:  (mu + t A'A)*u = mu*f + A'(t*v+l)
-rhsh = (v, l, t) -> mu*x_noisy+grad2d_conj(t*v+l);
-fs2 = conj(fsx).*fsx + conj(fsy).*fsy;
-solvh = (v, l, t) -> real.( ifft(1./(mu+t*fs2) .*fft(rhsh(v,l,t)))); #update u
+# min mu/2 ||Hu-f||^2 + t/2 ||-A(u) + v + l/t||^2
+#  opt condition:  (mu H'H + t A'A)*u = mu*H'f + A'(t*v+l)
+rhsh = (v, l, t) -> mu*H'*vis_given+grad2d_conj(t*v+l);
+#fs2 = conj(fsx).*fsx + conj(fsy).*fsy;
+#solvh = (v, l, t) -> real.( ifft(1./(mu+t*fs2) .*fft(rhsh(v,l,t)))); #update u
+solvh = (v, l, t) -> (mu*HtH + t*A'A)\rhsh(v,l,t);
+
 # min lam1 |x| + 1/(2t)|| x - z ||^2
 #  opt condition:  shrink(z, lam1*t)
 shrink = (x,t) -> sign.(x).*max.(abs.(x) - t,0);
@@ -54,7 +56,7 @@ fB =  x -> -x;
 fb = 0.0;
 #opts.obj = obj; #objective function, used when verbose
 ## initialization
-x0 = grad2d(x_noisy);
+x0 = H'*vis_given;
 l0 = ones(size(x0));
 ## ADMM solver
 #tic

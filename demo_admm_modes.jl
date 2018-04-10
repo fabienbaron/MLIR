@@ -58,7 +58,7 @@ imshow(sol4)
 # ARADMM
 #tic();
 opts.adp_flag = 5;
-opts.gamma = 1.0;
+opts.γ = 1.0;
 (sol6,outs6) =  aradmm_image_denoising(x_given, mu, lam1, opts);
 #t6 = outs6.runtime;
 @printf("ARADMM complete after %d iterations!\n", outs6.iter);

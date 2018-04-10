@@ -3,16 +3,16 @@ include("aradmm_core.jl")
 mutable struct optsinfo
 tol::Float64 #stop criterion, relative tolerance
 maxiter::Int64  #max interation
-tau::Float64  #initial stepsize
+τ::Float64  #initial stepsize
 verbose::Int64 #verbose print 0: no print, 1: print every iteration 2: evaluate objective every iteration 3: more print out for debugging adaptive relaxed ADMM
 adp_flag::Int64 # default method: ARADMM
 adp_freq::Int64  #frequency for adaptive penalty
 adp_start_iter::Int64 #start iteration of adaptive penalty
 adp_end_iter::Int64 #end iteration of adaptive penalty
-orthval::Float64  #threshold for correlation validation in ARADMM
+ϵcor::Float64  #threshold for correlation validation in ARADMM
 beta_scale::Float64  #residual balancing parameter
 res_scale::Float64  #residual balancing parameter
-gamma::Float64 # relaxation hyperparameter
+γ::Float64 # relaxation hyperparameter
 end
 
 function aradmm_image_epll(x_data::Array{Float64,2}, mu::Float64, lam1::Float64, opts::optsinfo, dict::GMM)

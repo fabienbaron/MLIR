@@ -19,8 +19,8 @@
 #       outs.pres  #primal residual
 #       outs.dres  #dual residual
 #       outs.mres  #monotone residual
-#       outs.taus  #penalty parameter
-#       outs.gammas #relaxation parameter
+#       outs.τs  #penalty parameter
+#       outs.γs #relaxation parameter
 #       outs.objs  #objective
 #       outs.tols #relative residual
 #       outs.iter  #total iteration before convergence
@@ -30,8 +30,8 @@ mutable struct outinfo
 pres  #primal residual
 dres  #dual residual
 mres  #monotone residual
-taus  #penalty parameter
-gammas #relaxation parameter
+τs  #penalty parameter
+γs #relaxation parameter
 objs  #objective
 tols #relative residual
 iter  #total iteration before convergence
@@ -43,34 +43,34 @@ function aradmm_core(solvh, solvg, A, At, B, b, v0, l0, obj, opts) # returns (so
 #general
 maxiter = opts.maxiter;
 tol = opts.tol; #relative tol for stop criterion
-minval = 1e-20; #max(opts.tol/10, 1e-20); #smallest value considered
-tau = max(opts.tau, minval); #initial stepsize
+const minval = 1e-20; #max(opts.tol/10, 1e-20); #smallest value considered
+τ = max(opts.τ, minval); #initial stepsize
 adp = opts.adp_flag;
 verbose = opts.verbose;
 #ARADMM
 freq = opts.adp_freq; #adaptive stepsize, update frequency
 siter = max(opts.adp_start_iter-1, 1); #start iteration for adaptive stepsize, at least 1, then start at siter+1
 eiter = min(opts.adp_end_iter, maxiter)+1; #end iteration for adaptive stepsize, at most the maximum iteration number
-orthval = max(opts.orthval, minval);  #value to test correlation, curvature could be estimated or not
+ϵcor = max(opts.ϵcor, minval);  #value to test correlation, curvature could be estimated or not
 #Residual balance
-bs = opts.beta_scale; #the scale for updating stepsize, tau = bs * tau or tau/bs, 2 in the paper
+bs = opts.beta_scale; #the scale for updating stepsize, τ = bs * τ or τ/bs, 2 in the paper
 rs = opts.res_scale; #the scale for the criterion, pres/dres ~ rs or 1/rs, 0.1 in the paper
 #relaxation parameter
-gamma = opts.gamma;
-gamma0 = 1.5;
-gmh = 1.9;
-gmg = 1.1;
+γ = opts.γ;
+const γ0 = 1.5;
+const gmh = 1.9;
+const gmg = 1.1;
 
 #record
 pres = zeros(maxiter, 1); # primal residual
 dres = zeros(maxiter, 1); # dual residual
 mres = zeros(maxiter, 1);  # the monotone residual
-taus = zeros(maxiter+1, 1); # penalty
+τs = zeros(maxiter+1, 1); # penalty
 objs = zeros(maxiter, 1); # objective
 tols = zeros(maxiter, 1); # relative residual
 gms = zeros(maxiter+1, 1); # relaxation parameter
-taus[1] = copy(tau);
-gms[1] = copy(gamma);
+τs[1] = copy(τ);
+gms[1] = copy(γ);
 
 #initialize
 v1 = copy(v0);
@@ -86,31 +86,28 @@ Au0=[]
 l_hat0=[]
 for iter = 1:maxiter
     #update u
-    u = solvh(v1, l1, tau);
+    u = solvh(v1, l1, τ);
     Au = A(u);
     #update v
-    au =  gamma*Au + (1.0-gamma)*(b-Bv1);  #relax
-    v = solvg(au, l1, tau);
+    au =  γ*Au + (1.0-γ)*(b-Bv1);  #relax
+    v = solvg(au, l1, τ);
     Bv = B(v);
     #update l
-    l = l1 + tau*(b-au-Bv);
+    l = l1 + τ*(b-au-Bv);
     #residual
     pres1 = b-Au-Bv;
     pres[iter] = norm(pres1[:]);  #primal residual
     dres1 = At(Bv-Bv1);
-    dres[iter] = tau*norm(dres1[:]); #dual residual
-    mres[iter] = tau*pres[iter]^2+tau*norm(Bv[:]-Bv1[:])^2; #monotone residual
-    if verbose > 1
-        objs[iter] = obj(u, v); #objective
-        @printf("Objective: %e\n", objs[iter]);
-    end
+    dres[iter] = τ*norm(dres1[:]); #dual residual
+    mres[iter] = τ*pres[iter]^2+τ*norm(Bv[:]-Bv1[:])^2; #monotone residual
     #stop criterion
     tmp = At(l);
     pres_norm = pres[iter]/maximum([norm(Au[:]),norm(Bv[:]),b_norm]);
     dres_norm = dres[iter]/norm(tmp[:]);
     tols[iter] = maximum([pres_norm, dres_norm]);
     if verbose>0
-        @printf("%d ADMM iter: %d, tol: %e\n", adp, iter, tols[iter]);
+        objs[iter] = obj(u, v); #objective
+        @printf("It: %d Obj: %e τ: %e Meth: %d tol: %e primresn: %e dualresn: %e \n", iter, objs[iter], τ, adp, tols[iter], pres_norm, dres_norm );
     end
     if tols[iter] < tol
         break;
@@ -121,13 +118,13 @@ for iter = 1:maxiter
          #AADMM with spectral penalty
             if iter == 1 #record at first iteration
                 l0 = copy(l);
-                l_hat0 = l1 + tau*(b-Au-Bv1);
+                l_hat0 = l1 + τ*(b-Au-Bv1);
                 Bv0 = copy(Bv);
                 Au0 = copy(Au);
             elseif mod(iter,freq)==0 && iter>siter && iter < eiter   #adaptive stepsize
                 #l_hat
-                l_hat = l1 + tau*(b-Au-Bv1);
-                tau = aadmm_estimate(iter, tau, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, orthval, minval, verbose);
+                l_hat = l1 + τ*(b-Au-Bv1);
+                τ = aadmm_estimate(iter, τ, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, ϵcor, minval, verbose);
                 # record for next estimation
                 l0 = copy(l);
                 l_hat0 = copy(l_hat);
@@ -136,23 +133,23 @@ for iter = 1:maxiter
             end #frequency if, AADMM
     elseif (adp==3) #residual balancing
             if iter>siter && iter < eiter
-                if dres[iter] < pres[iter] * rs #dual residual is smaller, need large tau
-                    tau = bs * tau;
-                elseif pres[iter] < dres[iter] * rs #primal residual is smaller, need small tau
-                    tau = tau/bs;
-                    #else: same tau
+                if dres[iter] < pres[iter] * rs #dual residual is smaller, need large τ
+                    τ = bs * τ;
+                elseif pres[iter] < dres[iter] * rs #primal residual is smaller, need small τ
+                    τ = τ/bs;
+                    #else: same τ
                 end
             end #converge if, RB
     elseif(adp==5) #ARADMM
             if iter == 1 #record at first iteration
                 l0 = copy(l);
-                l_hat0 = l1 + tau*(b-Au-Bv1);
+                l_hat0 = l1 + τ*(b-Au-Bv1);
                 Bv0 = copy(Bv);
                 Au0 = copy(Au);
             elseif mod(iter,freq)==0 && iter>siter && iter < eiter   #adaptive stepsize
                 #l_hat
-                l_hat = l1 + tau*(b-Au-Bv1);
-                (tau, gamma) = aradmm_estimate(iter, tau, gamma, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, orthval, minval, verbose, gmh, gmg, gamma0);
+                l_hat = l1 + τ*(b-Au-Bv1);
+                (τ, γ) = aradmm_estimate(iter, τ, γ, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, ϵcor, minval, verbose, gmh, gmg, γ0);
                 # record for next estimation
                 l0 = copy(l);
                 l_hat0 = copy(l_hat);
@@ -161,18 +158,31 @@ for iter = 1:maxiter
             end #frequency if, AADMM
     end #adaptive switch
     #end of adaptivity
-    taus[iter+1] = tau;
-    gms[iter+1] = gamma;
+    τs[iter+1] = τ;
+    gms[iter+1] = γ;
     Bv1 = copy(Bv);
     v1 = copy(v);
     l1 = copy(l);
+    if verbose > 1
+    figure(1)
+    clf();
     imshow(u);
+    figure(2);
+    clf();
+    subplot(2,1,1)
+    semilogy(pres[1:iter], label="Primal residual")
+    semilogy(dres[1:iter], label="Dual residual")
+    semilogy(mres[1:iter], label="Monotonic residual")
+    legend()
+    subplot(2,1,2)
+    semilogy(objs[1:iter], label="Objective function");
+    end
 end
 
 outs = outinfo(pres[1:iter], #primal residual
     dres[1:iter], #dual residual
     mres[1:iter], #monotone residual
-    taus[1:iter], #penalty parameter
+    τs[1:iter], #penalty parameter
     gms[1:iter], #relaxation parameter
     objs[1:iter], #objective
     tols[1:iter], #relative residual
@@ -184,14 +194,14 @@ function curv_adaptive_BB(αSD, αMG)
 #adaptive BB, reference: FASTA paper of Tom Golstein
 tmph = αMG/αSD; #correlation
 if tmph > .5
-    tau_h = αMG;
+    τ_h = αMG;
 else
-    tau_h = αSD - 0.5*αMG;
+    τ_h = αSD - 0.5*αMG;
 end
-return tau_h
+return τ_h
 end
 
-function aradmm_estimate(iter, tau, gamma, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, orthval, minval, verbose, gmh, gmg, gamma0)
+function aradmm_estimate(iter, τ, γ, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, ϵcor, minval, verbose, gmh, gmg, γ0)
 #inner product
 ul_hat = sum(real(conj(Au-Au0).*(l_hat-l_hat0))); # <Δh,Δλhat>
 vl = sum(real(conj(Bv-Bv0).*(l-l0))); # <Δg,Δλ>
@@ -211,30 +221,30 @@ gflag = false;
 #estimate curvature, only if it can be estimated
 #use correlation/othogonal to test whether can be estimated
 #use the previous stepsize when curvature cannot be estimated
-if ul_hat > orthval*du*dl_hat + minval # αcorr = ul_hat/du/dl_hat
+if ul_hat > ϵcor*du*dl_hat + minval # αcor = ul_hat/du/dl_hat
     hflag = true;
     αSD = dl_hat^2/ul_hat;
-    αMG = ul_hat/du^2;     # αMG
+    αMG = ul_hat/du^2;
     α = curv_adaptive_BB(αSD, αMG);
 end
-if vl > orthval*dv*dl + minval # βcorr = vl/dv/dl
+if vl > ϵcor*dv*dl + minval # βcor = vl/dv/dl
     gflag = true;
-    βSD = dl^2/vl; # βSD
-    βMG = vl/dv^2; # βMG
+    βSD = dl^2/vl;
+    βMG = vl/dv^2;
     β = curv_adaptive_BB(βSD, βMG);
 end
 
 if hflag && gflag
-    gamma = min(1 + 2*sqrt(α*β)/(α+β), gamma0);
-    tau = sqrt(α*β);
+    γ = min(1 + 2*sqrt(α*β)/(α+β), γ0);
+    τ = sqrt(α*β);
 elseif hflag
-    gamma = copy(gmh); #1.9;
-    tau = copy(α);
+    γ = copy(gmh); #1.9;
+    τ = copy(α);
 elseif gflag
-    gamma = copy(gmg); #1.1;
-    tau = copy(β);
+    γ = copy(gmg); #1.1;
+    τ = copy(β);
 else
-    gamma = copy(gamma0); #1.5;
+    γ = copy(γ0); #1.5;
 end
 
 if verbose == 3
@@ -242,20 +252,20 @@ if verbose == 3
         @printf("(%d) <u, l>=%f, <v, l>=%f\n", iter, ul_hat, vl);
     end
     if hflag
-        @printf("(%d) corr_h=%f,  αSD=%f,  estimated tau=%f,  gamma=%f \n", iter,ul_hat/du/dl_hat, αSD, tau, gamma);
+        @printf("(%d) corr_h=%f,  αSD=%f,  estimated τ=%f,  γ=%f \n", iter,ul_hat/du/dl_hat, αSD, τ, γ);
     end
     if gflag
-        @printf("(%d) corr_g=%f,  βSD=%f,  estimated tau=%f gamma=%f\n", iter,vl/dv/dl, βSD, tau, gamma);
+        @printf("(%d) corr_g=%f,  βSD=%f,  estimated τ=%f γ=%f\n", iter,vl/dv/dl, βSD, τ, γ);
     end
     if ~hflag && ~gflag
-        @printf("(%d) no curvature, corr_h=%f, corr_g=%f, tau=%f,  gamma=%f\n", iter, ul_hat/du/dl_hat, vl/dv/dl, tau, gamma);
+        @printf("(%d) no curvature, corr_h=%f, corr_g=%f, τ=%f,  γ=%f\n", iter, ul_hat/du/dl_hat, vl/dv/dl, τ, γ);
     end
 end
-return (tau, gamma)
+return (τ, γ)
 end
 
 ## AADMM spectral penalty parameter
-function aadmm_estimate(iter, tau, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, orthval, minval, verbose)
+function aadmm_estimate(iter, τ, Au, Au0, l_hat, l_hat0, Bv, Bv0, l, l0, ϵcor, minval, verbose)
 #inner product
 ul_hat = sum(real(conj(Au-Au0).*(l_hat-l_hat0)));# <Δh,Δλhat>
 vl = sum(real(conj(Bv-Bv0).*(l-l0)));# <Δg,Δλ>
@@ -275,13 +285,13 @@ gflag = false;
 #estimate curvature, only if it can be estimated
 #use correlation/othogonal to test whether can be estimated
 #use the previous stepsize when curvature cannot be estimated
-if ul_hat > orthval*du*dl_hat + minval
+if ul_hat > ϵcor*du*dl_hat + minval
     hflag = true;
     αSD = dl_hat^2/ul_hat;
     αMG = ul_hat/du^2;
     α = curv_adaptive_BB(αSD, αMG);
 end
-if vl > orthval*dv*dl + minval
+if vl > ϵcor*dv*dl + minval
     gflag = true;
     βSD = dl^2/vl;
     βMG = vl/dv^2;
@@ -292,26 +302,24 @@ end
 #if one of the curvature cannot be estimated, use the estimated one
 #or use the previous stepsize to estimate
 if hflag && gflag
-    tau = sqrt(α*β);
+    τ = sqrt(α*β);
 elseif hflag
-    tau = copy(α);
+    τ = copy(α);
 elseif gflag
-    tau = copy(β);
-    #else
-    #tau = tau;
+    τ = copy(β);
 end
 
 if verbose == 3
     @printf("(%d) <u, l>=%f, <v, l>=%f\n", iter, ul_hat, vl);
     if hflag
-        @printf("(%d) corr_h=%f,  αSD=%f,  estimated tau=%f \n", iter, ul_hat/du/dl_hat, αSD, tau);
+        @printf("(%d) corr_h=%f,  αSD=%f,  estimated τ=%f \n", iter, ul_hat/du/dl_hat, αSD, τ);
     end
     if gflag
-        @printf("(%d) corr_g=%f,  βSD=%f,  estimated tau=%f \n", iter, vl/dv/dl, βSD, tau);
+        @printf("(%d) corr_g=%f,  βSD=%f,  estimated τ=%f \n", iter, vl/dv/dl, βSD, τ);
     end
     if ~hflag && ~gflag
-        @printf("(%d) no curvature, corr_h=%f, corr_g=%f, tau=%f \n", iter, ul_hat/du/dl_hat, vl/dv/dl, tau);
+        @printf("(%d) no curvature, corr_h=%f, corr_g=%f, τ=%f \n", iter, ul_hat/du/dl_hat, vl/dv/dl, τ);
     end
 end
-return tau
+return τ
 end

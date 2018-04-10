@@ -1,3 +1,5 @@
+using JLD #to load the EPLL file
+
 mutable struct GMM
   nmodels::Float64
   dim::Float64
