@@ -164,16 +164,16 @@ function OnlineGMMEM(GMM0,DataSource,NumIterations,MiniBatchSize,OutputFile,T0,a
 
   N = size(X,2);
   if (typeof(GMM0) != GMM)
-    #  idx = randsample(N,K);
-    #  m = X[:,idx];
-    #  TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
-    #  label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
-    #  while K != length(unique(label))
-    #    idx = randsample(N,K);
-    #    m = X[:,idx];
-    #    TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
-    #    label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
-    #  end
+     # idx = randsample(N,K);
+     # m = X[:,idx];
+     # TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
+     # label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
+     # while K != length(unique(label))
+     #   idx = randsample(N,K);
+     #   m = X[:,idx];
+     #   TEMP = broadcast(-, m'*X,sum(m.^2,1)'/2);
+     #   label,~ = ind2sub(size(TEMP),vec((findmax(TEMP,(1,)))[2]));
+     # end
     label = ceil.(K*rand(1,N));
     R = full(sparse(collect(1:N),vec(label),ones(N),N,K));
     eta = 1;

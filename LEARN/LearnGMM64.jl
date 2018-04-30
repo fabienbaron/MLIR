@@ -4,7 +4,7 @@ include("OnlineGMMEM.jl")
 PyPlot.show()
 PatchSize = 8;
 nmodels = 50;
-MiniBatchSize = 5000;
+MiniBatchSize = 1000;
 output_dict = "GMM_$(PatchSize)x$(PatchSize)_$(nmodels)_$(MiniBatchSize)-64.jld";
 Images = Array{Array{Float64, 2}}(3);
 #% Note: FITS images need to be rescaled to range 0-1

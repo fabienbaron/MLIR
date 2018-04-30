@@ -40,7 +40,7 @@ g = x -> lam1*norm(x[:],1); #regularizer
 obj = (u, v) -> h(u)+g(grad2d(u));
 # min mu/2 ||u-f||^2 + t/2 ||-A(u) + v + l/t||^2
 #  opt condition:  (mu + t A'A)*u = mu*f + A'(t*v+l)
-rhsh = (v, l, t) -> mu*x_noisy+grad2d_conj(t*v+l);
+rhsh = (v, l, t) -> mu*x_data+grad2d_conj(t*v+l);
 fs2 = conj(fsx).*fsx + conj(fsy).*fsy;
 solvh = (v, l, t) -> real.( ifft(1./(mu+t*fs2) .*fft(rhsh(v,l,t)))); #update u
 # min lam1 |x| + 1/(2t)|| x - z ||^2
@@ -54,7 +54,7 @@ fB =  x -> -x;
 fb = 0.0;
 #opts.obj = obj; #objective function, used when verbose
 ## initialization
-x0 = grad2d(x_noisy);
+x0 = grad2d(x_start);
 l0 = ones(size(x0));
 ## ADMM solver
 #tic

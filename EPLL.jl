@@ -51,6 +51,21 @@ end
 return S
 end
 
+
+# function logsumexp(x::AbstractArray{T}) where T<:Real
+#     S = typeof(exp(zero(T)))    # because of 0.4.0
+#     isempty(x) && return -S(Inf)
+#     u = maximum(x)
+#     abs(u) == Inf && return any(isnan, x) ? S(NaN) : u
+#     s = zero(S)
+#     for i = 1:length(x)
+#         @inbounds s += exp(x[i] - u)
+#     end
+#     log(s) + u
+# end
+
+
+
 function EPLL(x, GDict) # regularizer value where x is the image
   patchSize = Int(sqrt(GDict.dim));
   xmin = minimum(x);
