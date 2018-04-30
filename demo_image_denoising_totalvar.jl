@@ -15,15 +15,15 @@ x_given[x_given.<0.0] = 0.0;
 
 opts = optsinfo(1e-3,2000,0.1,1,5,2,2,1000,0.2,2,0.1,1); #relaxation parameter
 opts.adp_flag = 5;
-opts.gamma = 1.;
-opts.verbose = 2
+opts.γ = 1.;
+opts.verbose = 0
 
 ##
 #L-CURVE
  mu = 1.0/sig^2;  #constraint
  lcurve=collect(linspace(11., 20., 10))
  for lam1 in lcurve
- (sol6,outs6) =  aradmm_image_denoising(x_given, mu, lam1, opts);
+ (sol6,outs6) =  aradmm_image_denoising(x_given,x_given,  mu, lam1, opts);
  println("lambda = $lam1 PSNR: ",20*log10(1/std(sol6-x_true)), "  l1diff: ", norm(sol6-x_true,1), " MSE: ", norm(sol6-x_true,2), "\n");
  @printf("ARADMM complete after %d iterations!\n", outs6.iter);
  figure(5)
